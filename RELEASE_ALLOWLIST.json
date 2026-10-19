@@ -1,0 +1,28 @@
+{
+  "excluded_categories": [
+    "research originals",
+    "private materials",
+    "internal reviews and logs",
+    "absolute local paths",
+    "credentials"
+  ],
+  "files": [
+    "LICENSE",
+    "README.md",
+    "RELEASE_ALLOWLIST.json",
+    "UPSTREAM-LICENSE.txt",
+    "skills/shirube/LICENSE",
+    "skills/shirube/README.md",
+    "skills/shirube/SKILL.md",
+    "skills/shirube/UPSTREAM-LICENSE.txt",
+    "skills/shirube/examples/blog.txt",
+    "skills/shirube/examples/ledger.json",
+    "skills/shirube/examples/newspaper.txt",
+    "skills/shirube/examples/register.txt",
+    "skills/shirube/references/ledger.md",
+    "skills/shirube/references/upstream.md",
+    "skills/shirube/scripts/evidence.py",
+    "skills/shirube/tests/test_evidence.py"
+  ],
+  "version": "1.0.0"
+}
