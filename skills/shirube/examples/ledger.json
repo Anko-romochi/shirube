@@ -1,0 +1,149 @@
+{
+  "baseline": {
+    "claim_states": [
+      {
+        "conclusion": "新聞が十五日と伝える。正確な日付は未確定。",
+        "id": "opening",
+        "review_states": [
+          "unreviewed"
+        ],
+        "source_keys": [
+          "fiction:newspaper.txt"
+        ],
+        "status": "partial"
+      }
+    ],
+    "claims": [],
+    "sources": [
+      "fiction:newspaper.txt"
+    ],
+    "status": "read"
+  },
+  "claims": [
+    {
+      "change_reason": "開設控とブログを追加。対象事象と原典写しの同一性が未確認。",
+      "conclusion": "閲覧開始十二日と開設十五日の関係は未確定。",
+      "conflicts": [],
+      "counterevidence_search": "incomplete",
+      "evidence": [
+        {
+          "end": 2,
+          "quote": "六月十二日、閲覧を始む。",
+          "review": {
+            "state": "unreviewed"
+          },
+          "role": "context",
+          "source": "a",
+          "start": 2,
+          "use": "body"
+        },
+        {
+          "end": 2,
+          "quote": "六月十五日に開かれたという。",
+          "review": {
+            "state": "unreviewed"
+          },
+          "role": "context",
+          "source": "b",
+          "start": 2,
+          "use": "body"
+        },
+        {
+          "end": 2,
+          "quote": "六月十五日が開設日だった。",
+          "review": {
+            "state": "unreviewed"
+          },
+          "role": "context",
+          "source": "c",
+          "start": 2,
+          "use": "body"
+        }
+      ],
+      "id": "opening",
+      "next_checks": [
+        {
+          "question": "閲覧開始と開設は同一事象か。転記差はあるか。",
+          "reason": "日付差を解消する原文が不足している。",
+          "target": "架空の日誌・規則本文と控の原本/写し"
+        }
+      ],
+      "novelty": "none",
+      "status": "contested",
+      "text": "正確な開設日を確定できるか"
+    }
+  ],
+  "log": [
+    "架空例。外部検索は未実施。意味レビューは全リンク未実施。"
+  ],
+  "question": "閲覧開始日と開設日は同じか",
+  "schema": 2,
+  "sources": [
+    {
+      "access": "ok",
+      "accessed": "2026-10-19",
+      "derived_from": [],
+      "edition": "架空fixture第1版",
+      "file": "register.txt",
+      "id": "a",
+      "key": "fiction:register.txt",
+      "kind": "body",
+      "limitation": "全て架空。新聞の控写しとaの同一性は未確認。",
+      "lineage": [
+        "register"
+      ],
+      "period": "1872",
+      "read_ranges": [
+        "提供された短文全体。原本実物ではない。"
+      ],
+      "scope": "full",
+      "sha256": "398d06b4a5714a9ea7a8853f4926e5a93df0d70683c2a509058b7020ea1d6861",
+      "title": "架空資料 register.txt",
+      "url": "local:register.txt"
+    },
+    {
+      "access": "ok",
+      "accessed": "2026-10-19",
+      "derived_from": [],
+      "edition": "架空fixture第1版",
+      "file": "newspaper.txt",
+      "id": "b",
+      "key": "fiction:newspaper.txt",
+      "kind": "body",
+      "limitation": "全て架空。新聞の控写しとaの同一性は未確認。",
+      "lineage": [],
+      "period": "1890 retrospective on 1872",
+      "read_ranges": [
+        "提供された短文全体。原本実物ではない。"
+      ],
+      "scope": "full",
+      "sha256": "22b41e996603313cfda6c82d738d08be41a40f8b761f90a25f0f0e1728520ae6",
+      "title": "架空資料 newspaper.txt",
+      "url": "local:newspaper.txt"
+    },
+    {
+      "access": "ok",
+      "accessed": "2026-10-19",
+      "derived_from": [
+        "b"
+      ],
+      "edition": "架空fixture第1版",
+      "file": "blog.txt",
+      "id": "c",
+      "key": "fiction:blog.txt",
+      "kind": "body",
+      "limitation": "全て架空。新聞の控写しとaの同一性は未確認。",
+      "lineage": [],
+      "period": "2020 retrospective on 1872",
+      "read_ranges": [
+        "提供された短文全体。原本実物ではない。"
+      ],
+      "scope": "full",
+      "sha256": "dca3f48e90ca2e9d1346b594f43896d04a7309ffde1791ce6a418fa2c3120dcf",
+      "title": "架空資料 blog.txt",
+      "url": "local:blog.txt"
+    }
+  ],
+  "stopped": "提供された架空短文のみ。日誌と規則の本文未提供。",
+  "title": "架空文庫の開設日"
+}
