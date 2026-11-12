@@ -186,12 +186,16 @@ def inspect(d, root):
     for sid,ps in parents.items():
         if any(x not in sources for x in ps): err('/sources/'+sid+'/derived_from','unknown_source')
         if ps and sources[sid]['lineage']: err('/sources/'+sid+'/lineage','derived_source_must_inherit_roots')
-    origins={}; pending=set(sources)
+    origins={}; unknown_ancestry={}; pending=set(sources)
     while pending:
         ready=sorted(x for x in pending if parents[x].issubset(origins))
         if not ready: err('/sources/derived_from','cycle_or_unknown_dependency'); break
         for sid in ready:
             roots=set(sources[sid]['lineage']) if not parents[sid] else set().union(*(origins[x] for x in parents[sid]))
+            # An empty root set means unknown, not an absence of ancestors.
+            # Preserve that uncertainty when known and unknown paths are merged.
+            unknown_ancestry[sid]=(not roots if not parents[sid]
+                                   else any(unknown_ancestry[x] for x in parents[sid]))
             origins[sid]=roots; pending.remove(sid)
     for i,c in enumerate(d['claims']):
         if c['id'] in claim_ids: err(f'/claims/{i}/id','duplicate_id')
@@ -216,7 +220,7 @@ def inspect(d, root):
                 support+=1
                 if state=='accepted':
                     reviewed+=1
-                    if len(origins[sid])==1: roots.update(origins[sid])
+                    if len(origins[sid])==1 and not unknown_ancestry[sid]: roots.update(origins[sid])
                     else: uncertain.add(sid)
             if q['role']=='refute': refutes+=1
         if c['status']=='supported' and not support: err(p+'/status','supported_without_support_link')
@@ -260,6 +264,65 @@ def load_ledger(path):
     return json.loads(path.read_text(encoding='utf-8'),object_pairs_hook=pairs,parse_constant=nonfinite)
 
 
+def render_evidence(q, source):
+    """Render recorded evidence; do not infer or upgrade its review state."""
+    esc=lambda value: html.escape(str(value))
+    review=q.get('review',{})
+    state=review.get('state','unreviewed')
+    origin=source['url']
+    if urlsplit(origin).scheme in ('http','https'):
+        link='<a href="'+esc(origin)+'" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">原資料を開く</a>'
+    else:
+        link='<span>ローカル資料（外部リンクなし）</span>'
+    note=('担当: '+esc(review['reviewer'])+'<br>理由: '+esc(review['note'])
+          if state in ('accepted','rejected') else '意味レビューは未記録です。')
+    metadata=' / '.join(esc(source[k]) for k in ('edition','kind','scope'))
+    return ('<article class="evidence"><strong>'+esc(source['title'])+'</strong>'
+            '<div class="metadata">'+esc(q['source'])+':'+str(q['start'])+'-'+str(q['end'])
+            +' / '+esc(q['role'])+' / '+metadata+'</div><div>'+link+'</div>'
+            '<div>確認範囲: '+esc('; '.join(source['read_ranges']))+'</div>'
+            '<div>制約: '+esc(source['limitation'])+'</div>'
+            '<blockquote>'+esc(q['quote'])+'</blockquote><div>レビュー: '+esc(state)+'</div>'
+            '<div>'+note+'</div></article>')
+
+
+def render_report(d, result):
+    esc=lambda value: html.escape(str(value))
+    byid={r['id']:r for r in result['claims']}
+    sources={s['id']:s for s in d['sources']}
+    rows=[]
+    for c in d['claims']:
+        r=byid[c['id']]
+        refs=''.join(render_evidence(q,sources[q['source']]) for q in c['evidence']) or '引用は未記録です。'
+        origins=('集計対象: '+str(r['recorded_origin_group_count'])
+                 +'<br>系列: '+esc(', '.join(r['recorded_origin_groups']) or 'なし')
+                 +'<br>系列不確か: '+esc(', '.join(r['uncertain_origin_sources']) or 'なし'))
+        todo='; '.join(x['target']+' / '+x['question']+' / '+x['reason'] for x in c.get('next_checks',[]))
+        cells=[esc(c['id']),esc(c['text']),esc('申告: '+c['status']),esc(r['link_review_state']),origins,refs,esc(todo)]
+        rows.append('<tr>'+''.join('<td>'+x+'</td>' for x in cells)+'</tr>')
+    style=('body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.6;color:#20252b;background:#fbfcfe}'
+           '.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;background:white}'
+           'td,th{border:1px solid #ccd2db;padding:.75rem;vertical-align:top;text-align:left;min-width:7rem}'
+           'th{background:#eef3f8}.evidence{min-width:18rem;max-width:38rem;overflow-wrap:anywhere}'
+           '.evidence+.evidence{border-top:1px solid #ccd2db;margin-top:1rem;padding-top:1rem}'
+           'blockquote{margin:.75rem 0;padding:.5rem .75rem;border-left:3px solid #49728d;background:#f3f7fa;white-space:pre-wrap}'
+           '.metadata{font-size:.9rem;color:#4e5b68}pre{white-space:pre-wrap;overflow-wrap:anywhere}'
+           '.notice{padding:1rem;border:1px solid #b4c4d0;background:#f0f5f9}a{color:#155987}'
+           '@media(max-width:600px){body{margin:1rem}td,th{padding:.5rem}}')
+    return ('<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>SHIRUBE evidence map</title><style>'+style+'</style></head><body>'
+            '<h1>SHIRUBE — 主張と根拠の地図</h1><h2>'+esc(d['title'])+'</h2><p>'+esc(d['question'])+'</p>'
+            '<p class="notice">原文・形式の照合済み。意味的な支持・真偽・原典の独立性は自動保証しません。'
+            '申告状態と引用リンクのレビュー記録を分けて表示します。反証の未登録・系列の誤分類は自動発見できません。'
+            '原典系列の集計対象はaccepted支持リンクの記録だけです。不明な祖先を含む系列は数に加えません。</p>'
+            '<div class="table-wrap" role="region" aria-label="主張と根拠の一覧" tabindex="0"><table><thead><tr>'
+            '<th scope="col">ID</th><th scope="col">主張</th><th scope="col">申告状態</th><th scope="col">リンクのレビュー記録</th>'
+            '<th scope="col">原典系列（記録）</th><th scope="col">引用・意味レビュー</th><th scope="col">次の確認</th>'
+            '</tr></thead><tbody>'+''.join(rows)+'</tbody></table></div><h2>結論差分（文字列・集合）</h2><pre>'
+            +esc(canonical(result['delta']))+'</pre><h2>全記録（非公開の絶対パス等を含みうるため、共有前に確認）</h2><pre>'
+            +esc(canonical({'ledger':d,'verification':result}))+'</pre></body></html>\n')
+
+
 def run(ledger,output):
     if output.exists(): raise ValueError('output_must_be_new')
     try: d=load_ledger(ledger); result=inspect(d,ledger.parent)
@@ -268,14 +331,7 @@ def run(ledger,output):
     output.mkdir(parents=True,exist_ok=False)
     (output/'verification.json').write_text(canonical(result),encoding='utf-8',newline='\n')
     if not result['formal_valid']: return 1
-    byid={r['id']:r for r in result['claims']}; rows=[]
-    for c in d['claims']:
-        r=byid[c['id']]
-        refs='; '.join(q['source']+':'+str(q['start'])+'-'+str(q['end'])+' '+q['role']+' / '+q.get('review',{}).get('state','unreviewed') for q in c['evidence'])
-        todo='; '.join(x['target']+' / '+x['question']+' / '+x['reason'] for x in c.get('next_checks',[]))
-        cells=(c['id'],c['text'],'申告: '+c['status'],r['link_review_state'],refs,todo)
-        rows.append('<tr>'+''.join('<td>'+html.escape(str(x))+'</td>' for x in cells)+'</tr>')
-    page='<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SHIRUBE evidence map</title><style>body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.6}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:.5rem;vertical-align:top;text-align:left}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>SHIRUBE — 主張と根拠の地図</h1><p>原文・形式の照合済み。意味的な支持・真偽・原典の独立性は自動保証しません。申告状態と引用リンクのレビュー記録を分けて表示します。反証の未登録・系列の誤分類は自動発見できません。</p><table><tr><th>ID</th><th>主張</th><th>申告状態</th><th>リンクのレビュー記録</th><th>引用</th><th>次の確認</th></tr>'+''.join(rows)+'</table><h2>結論差分（文字列・集合）</h2><pre>'+html.escape(canonical(result['delta']))+'</pre><h2>全記録（非公開の絶対パス等を含みうるため、共有前に確認）</h2><pre>'+html.escape(canonical({'ledger':d,'verification':result}))+'</pre></html>\n'
+    page=render_report(d,result)
     (output/'report.html').write_text(page,encoding='utf-8',newline='\n')
     (output/'delta.json').write_text(canonical(result['delta']),encoding='utf-8',newline='\n')
     return 0

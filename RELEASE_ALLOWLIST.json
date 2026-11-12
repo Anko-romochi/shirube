@@ -7,6 +7,7 @@
     "credentials"
   ],
   "files": [
+    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "RELEASE_ALLOWLIST.json",
@@ -24,5 +25,5 @@
     "skills/shirube/scripts/evidence.py",
     "skills/shirube/tests/test_evidence.py"
   ],
-  "version": "1.0.0"
+  "version": "1.0.1"
 }

@@ -48,6 +48,80 @@ class EvidenceTests(unittest.TestCase):
         self.accepted()
         for roots in ([],['one','two']):
             self.d['sources'][0]['lineage']=roots;r=self.check()['claims'][0];self.assertEqual(r['recorded_origin_group_count'],0);self.assertEqual(r['uncertain_origin_sources'],['a'])
+    def derived_source(self, sid, parents=(), lineage=()):
+        source=copy.deepcopy(self.d['sources'][0])
+        source.update(id=sid,key=sid,lineage=list(lineage),derived_from=list(parents))
+        self.d['sources'].append(source)
+
+    def accepted_claim_from(self, sid):
+        self.accepted()
+        self.d['claims'][0]['evidence'][0]['source']=sid
+        result=self.check()
+        self.assertTrue(result['formal_valid'],result['errors'])
+        return result['claims'][0]
+
+    def test_known_and_unknown_parent_remain_uncertain(self):
+        self.derived_source('unknown')
+        self.derived_source('mixed',['a','unknown'])
+        r=self.accepted_claim_from('mixed')
+        self.assertEqual(r['recorded_accepted_support_links'],1)
+        self.assertEqual(r['recorded_origin_group_count'],0)
+        self.assertEqual(r['uncertain_origin_sources'],['mixed'])
+        self.assertFalse(r['semantic_guarantee'])
+
+    def test_unknown_ancestry_survives_multiple_generations(self):
+        self.derived_source('unknown')
+        self.derived_source('mixed',['a','unknown'])
+        self.derived_source('copy',['mixed'])
+        self.derived_source('merged_again',['copy','a'])
+        r=self.accepted_claim_from('merged_again')
+        self.assertEqual(r['recorded_origin_groups'],[])
+        self.assertEqual(r['uncertain_origin_sources'],['merged_again'])
+
+    def test_all_unknown_derived_source_remains_uncertain(self):
+        self.derived_source('unknown')
+        self.derived_source('copy',['unknown'])
+        r=self.accepted_claim_from('copy')
+        self.assertEqual(r['recorded_origin_group_count'],0)
+        self.assertEqual(r['uncertain_origin_sources'],['copy'])
+
+    def test_known_converging_paths_still_count_once(self):
+        self.derived_source('copy1',['a'])
+        self.derived_source('copy2',['a'])
+        self.derived_source('merged',['copy1','copy2'])
+        r=self.accepted_claim_from('merged')
+        self.assertEqual(r['recorded_origin_groups'],['original-a'])
+        self.assertEqual(r['uncertain_origin_sources'],[])
+
+    def test_mixed_source_does_not_remove_direct_known_support(self):
+        self.derived_source('unknown')
+        self.derived_source('mixed',['a','unknown'])
+        self.accepted()
+        q=copy.deepcopy(self.d['claims'][0]['evidence'][0]);q['source']='mixed'
+        self.d['claims'][0]['evidence'].append(q)
+        result=self.check();self.assertTrue(result['formal_valid'])
+        r=result['claims'][0]
+        self.assertEqual(r['recorded_accepted_support_links'],2)
+        self.assertEqual(r['recorded_origin_groups'],['original-a'])
+        self.assertEqual(r['uncertain_origin_sources'],['mixed'])
+
+    def test_multiple_known_parent_origins_remain_uncertain(self):
+        self.derived_source('other',lineage=['original-b'])
+        self.derived_source('mixed',['a','other'])
+        r=self.accepted_claim_from('mixed')
+        self.assertEqual(r['recorded_origin_group_count'],0)
+        self.assertEqual(r['uncertain_origin_sources'],['mixed'])
+
+    def test_unknown_parent_order_does_not_change_result(self):
+        self.derived_source('unknown')
+        self.derived_source('mixed',['a','unknown'])
+        before=self.accepted_claim_from('mixed')
+        self.d['sources'][-1]['derived_from'].reverse()
+        self.d['sources'].reverse()
+        after=self.accepted_claim_from('mixed')
+        self.assertEqual(before,after)
+        self.assertEqual(after['uncertain_origin_sources'],['mixed'])
+
     def test_cycle_rejected(self):
         self.d['sources'][0].update(lineage=[],derived_from=['a']);self.assertFalse(self.check()['valid'])
     def test_two_node_cycle_rejected(self):
@@ -120,6 +194,62 @@ class EvidenceTests(unittest.TestCase):
         self.d['baseline']['claim_states']=[dict(id='c',status='supported',conclusion='1870',source_keys=['school:edition1'],review_states=['unreviewed'])];self.accepted();self.assertEqual(self.check()['delta']['conclusion_changes'][0]['changed_fields'],['review_states'])
     def test_html_escape_and_source_commands_inert(self):
         self.d['claims'][0]['text']='<script>alert(1)</script>';p=self.root/'ledger.json';p.write_text(e.canonical(self.d),encoding='utf-8');self.assertEqual(e.run(p,self.root/'out'),0);t=(self.root/'out/report.html').read_text(encoding='utf-8');self.assertNotIn('<script>',t);self.assertIn('&lt;script&gt;',t);self.assertIn('no_reviewed_support',t)
+    def render_report(self):
+        ledger=self.root/'ledger.json';ledger.write_text(e.canonical(self.d),encoding='utf-8')
+        self.assertEqual(e.run(ledger,self.root/'report-output'),0)
+        return (self.root/'report-output/report.html').read_text(encoding='utf-8')
+
+    def test_report_displays_quote_and_semantic_review(self):
+        self.accepted();report=self.render_report().split('<h2>結論差分')[0]
+        self.assertIn('<blockquote>The school opened in 1870.</blockquote>',report)
+        self.assertIn('fixture-reviewer',report)
+        self.assertIn('The line addresses the date in this synthetic fixture.',report)
+        self.assertIn('Synthetic register',report)
+        self.assertIn('edition1',report)
+        self.assertIn('fixture line 1',report)
+        self.assertIn('Synthetic excerpt only',report)
+        self.assertIn('原典系列（記録）',report)
+        self.assertIn('original-a',report)
+
+    def test_report_displays_unknown_lineage_at_claim(self):
+        self.derived_source('unknown');self.derived_source('mixed',['a','unknown'])
+        self.accepted_claim_from('mixed')
+        report=self.render_report().split('<h2>結論差分')[0]
+        self.assertIn('集計対象: 0',report)
+        self.assertIn('系列不確か: mixed',report)
+
+    def test_report_remote_origin_link_is_explicit_and_escaped(self):
+        self.d['sources'][0]['url']='https://example.invalid/original?q=one&edition=two'
+        report=self.render_report().split('<h2>結論差分')[0]
+        self.assertIn('href="https://example.invalid/original?q=one&amp;edition=two"',report)
+        self.assertIn('rel="noopener noreferrer"',report)
+        self.assertIn('referrerpolicy="no-referrer"',report)
+        self.assertIn('原資料を開く',report)
+
+    def test_report_local_origins_are_not_external_links(self):
+        self.d['sources'][0]['url']=(self.root/'original.txt').as_uri()
+        report=self.render_report().split('<h2>結論差分')[0]
+        self.assertNotIn('href="file:',report)
+        self.assertNotIn('href="local:',report)
+        self.assertIn('ローカル資料（外部リンクなし）',report)
+
+    def test_report_review_note_and_title_are_escaped(self):
+        self.accepted()
+        self.d['title']='<script>title</script>'
+        self.d['sources'][0]['title']='<img src=x onerror=alert(1)>'
+        self.d['claims'][0]['evidence'][0]['review']['note']='<svg onload=alert(1)>'
+        report=self.render_report()
+        self.assertNotIn('<script>',report);self.assertNotIn('<img',report);self.assertNotIn('<svg',report)
+        self.assertIn('&lt;svg onload=alert(1)&gt;',report)
+        self.assertIn('&lt;script&gt;title&lt;/script&gt;',report)
+
+    def test_report_unreviewed_is_never_presented_as_accepted(self):
+        report=self.render_report().split('<h2>結論差分')[0]
+        self.assertIn('レビュー: unreviewed',report)
+        self.assertIn('意味レビューは未記録です。',report)
+        self.assertNotIn('レビュー: accepted',report)
+        self.assertIn('意味的な支持・真偽・原典の独立性は自動保証しません',report)
+
     def test_reproducible_output(self):
         p=self.root/'ledger.json';p.write_text(e.canonical(self.d),encoding='utf-8');e.run(p,self.root/'one');e.run(p,self.root/'two')
         for name in ('verification.json','delta.json','report.html'): self.assertEqual((self.root/'one'/name).read_bytes(),(self.root/'two'/name).read_bytes())

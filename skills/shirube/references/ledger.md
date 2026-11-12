@@ -17,7 +17,7 @@ id、key、title、url、accessed（YYYY-MM-DD）、edition、period、kind、sc
 - access: ok/blocked/unavailable。未取得でも所在レコードは残せるが、引用根拠には使えない。
 - url: HTTP/S、ローカル元資料のfile URI、または`local:保存コピーの相対パス`。file URIは空ホスト/localhost・絶対パス・query/fragmentなし。ローカル方式はfileとsha256を必須とする。URIは記録だけで取得しない。公開可能な架空例はlocal方式を使う。
 - fileとsha256: 保存コピーへの相対POSIXパスと64文字の小文字SHA-256を組で記録。親参照、絶対パス、Windows drive/ADS、backslash、外へのsymlinkを拒否。UTF-8の保存文のhashは生バイト、引用照合はCRLFをLFへ揃えて1始まりの行で扱う。ledgerは5MB、各保存文は10MBまで。
-- lineage: 原典グループIDの配列。不明は空。既知の派生資料はderived_fromにsource IDを置き、lineageを空にして依存元の原典グループを継承する。未知参照と循環を拒否。同じグループを重複計上しないが、実際の相互独立性は証明しない。複数原典を束ねた系列はuncertainとして独立数に加えない。
+- lineage: 原典グループIDの配列。不明は空。既知の派生資料はderived_fromにsource IDを置き、lineageを空にして依存元の原典グループを継承する。未知参照と循環を拒否。同じグループを重複計上しないが、実際の相互独立性は証明しない。複数原典を束ねた系列はuncertainとして独立数に加えない。既知の原典と原典不明の資料を束ねた場合も、不明な依存元が途中や祖先に1件でもあれば、その引用元をuncertainとして数から除く。既知原典に直接つながる別の引用の集計は維持する。
 
 ## Claimと引用リンク
 
